@@ -194,5 +194,3 @@ workflows:
         key_alias: $CM_KEY_ALIAS
         key_password: $CM_KEY_ALIAS_PASSWORD
 
-
-
