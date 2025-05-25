@@ -19,15 +19,15 @@ workflows:
         - keystore_credentials # For signing the APK/AAB
       vars:
         # !!! IMPORTANT: Confirm this is the correct Google Drive File ID for your source code ZIP !!!
-        # From your link: https://drive.google.com/file/d/ 1mPkpESe0DMANGmpjBzE-M7BYiRYRT8zP/view?usp=drivesdk
-        GOOGLE_DRIVE_FILE_ID: " 1mPkpESe0DMANGmpjBzE-M7BYiRYRT8zP"
+        # From your link: https://drive.google.com/file/d/1xPO6s-IJ3RxLlaA1m1TjlRj9QQndt9kw/view?usp=drivesdk
+        GOOGLE_DRIVE_FILE_ID: " 1xPO6s-IJ3RxLlaA1m1TjlRj9QQndt9kw"
         # Note: Based on the 'OriginalLamafia.zip' structure, the project files (pubspec.yaml, etc.)
         # are expected to be at the root level after unzipping. If your ZIP has the project
         # inside a subfolder, you'll need to adjust the 'cd' command in the scripts below.
 
         # !!! IMPORTANT: Replace with your actual package name from pubspec.yaml or build.gradle !!!
-        PACKAGE_NAME: "com.example.lamafia" # Example, adjust as needed (Check your pubspec.yaml)
-        APP_NAME: "LaMafia Federacao" # Example App Name
+        PACKAGE_NAME: "com.soloplayer.lamafia" # Example, adjust as needed (Check your pubspec.yaml)
+        APP_NAME: "LaMafia" # Example App Name
     scripts:
       - name: Install gdown
         script: |
