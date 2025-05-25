@@ -1,0 +1,103 @@
+# codemagic.yaml
+# IMPORTANT: Replace placeholders and configure environment variables in Codemagic UI.
+# Required Environment Variables/Groups in Codemagic:
+# 1. keystore_credentials (Secure):
+#    - CM_KEYSTORE: Upload your keystore file (e.g., from chavekeylamafia_release.zip)
+#    - CM_KEYSTORE_PASSWORD: Your keystore password
+#    - CM_KEY_ALIAS: Your key alias
+#    - CM_KEY_ALIAS_PASSWORD: Your key password
+
+workflows:
+  android-build-release:
+    name: Android Build and Release (APK/AAB Only)
+    # Choose instance type based on project needs (M1 is generally faster for Flutter)
+    instance_type: mac_mini_m1
+    max_build_duration: 60 # minutes
+    environment:
+      flutter: stable # Or specify your project's Flutter version, e.g., 3.19.6
+      # Ensure Java version is compatible if needed, e.g., java: 11
+      groups:
+        - keystore_credentials # For signing the APK/AAB
+      vars:
+        # !!! IMPORTANT: Replace with the actual Google Drive File ID !!!
+        # The ID from your link: https://drive.google.com/file/d/1id4Ry_Xg8DYmgKm3U2QJ5aerot_lmg7m/view?usp=drivesdk
+        GOOGLE_DRIVE_FILE_ID: "1id4Ry_Xg8DYmgKm3U2QJ5aerot_lmg7m"
+        # Note: Based on the 'OriginalLamafia.zip' structure, the project files (pubspec.yaml, etc.)
+        # are expected to be at the root level after unzipping. If your ZIP has the project
+        # inside a subfolder, you'll need to adjust the 'cd' command in the scripts below.
+        # !!! IMPORTANT: Replace with your actual package name from pubspec.yaml or build.gradle !!!
+        PACKAGE_NAME: "com.example.lamafia" # Example, adjust as needed (Check your pubspec.yaml)
+        APP_NAME: "LaMafia Federacao" # Example App Name
+    scripts:
+      - name: Install gdown
+        script: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+          pip3 install gdown
+      - name: Download source code from Google Drive
+        script: |
+          set -e
+          echo "Downloading project ZIP from Google Drive..."
+          # Using gdown to download the file using its ID
+          gdown --id $GOOGLE_DRIVE_FILE_ID -O project_source.zip
+      - name: Unzip source code
+        script: |
+          set -e
+          echo "Unzipping project source..."
+          # Create a directory to extract into
+          mkdir extracted_project
+          unzip project_source.zip -d extracted_project
+          echo "Contents of extracted_project:"
+          ls -l extracted_project
+          # Navigate into the extracted project directory
+          cd extracted_project
+          echo "Current directory: $(pwd)"
+          # Verify pubspec.yaml exists in the current directory
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "Error: pubspec.yaml not found in the root of the extracted ZIP."
+            echo "Please ensure the ZIP file contains the Flutter project files directly, not inside a subfolder,"
+            echo "or adjust the 'cd' command in this script if they are in a subfolder."
+            exit 1
+          fi
+          ls -la # List files to verify structure
+      - name: Set up local.properties
+        script: |
+          set -e
+          # Navigate into the project directory first
+          cd extracted_project
+          # Required for Flutter build if SDK path isn't automatically found
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          echo "Created android/local.properties"
+      - name: Get Flutter packages
+        script: |
+          set -e
+          cd extracted_project
+          flutter packages get
+      - name: Build Flutter App (APK and AAB)
+        script: |
+          set -e
+          cd extracted_project
+          # Clean previous build artifacts
+          flutter clean
+          # Build Release APK (signed via publishing section)
+          echo "Building Release APK..."
+          # BUILD_NUMBER is a built-in Codemagic variable, increments automatically
+          # Replace 1.0.0 with your actual version name if needed
+          flutter build apk --release --build-name=1.0.0 --build-number=$BUILD_NUMBER
+          # Build Release App Bundle (signed via publishing section)
+          echo "Building Release App Bundle..."
+          flutter build appbundle --release --build-name=1.0.0 --build-number=$BUILD_NUMBER
+    artifacts:
+      # Define paths relative to the root of the build directory ($CM_BUILD_DIR)
+      # These paths assume the build output is in the standard Flutter location
+      # relative to the extracted project root.
+      - extracted_project/build/app/outputs/flutter-apk/app-release.apk
+      - extracted_project/build/app/outputs/bundle/release/app-release.aab
+    publishing:
+      # Automatic code signing configuration using environment variables
+      # Make sure you have uploaded your keystore and set the variables in the 'keystore_credentials' group
+      android_signing:
+        keystore: $CM_KEYSTORE # Reference to the uploaded keystore file in Codemagic
+        keystore_password: $CM_KEYSTORE_PASSWORD
+        key_alias: $CM_KEY_ALIAS
+        key_password: $CM_KEY_ALIAS_PASSWORD
+
