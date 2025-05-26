@@ -1,97 +1,114 @@
-# codemagic.yaml # IMPORTANT: Replace placeholders and configure environment variables in Codemagic UI.
-# Required Environment Variables/Groups in Codemagic:
-# 1. keystore_credentials (Secure):
-#    - CM_KEYSTORE: Upload your keystore file (e.g., lamafia_release.keystore)
-#    - CM_KEYSTORE_PASSWORD: Your keystore password
-#    - CM_KEY_ALIAS: Your key alias
-#    - CM_KEY_ALIAS_PASSWORD: Your key password
+ codemagic.yaml - Configuração para build Flutter no CodeMagic (Projeto LAMAFIA)
+# Baseado nas informações de NOVOMETADADOS.txt e requisitos comuns.
 
 workflows:
-  android-build-release:
-    name: Android Build and Release (APK/AAB Only)
-    # Choose instance type based on project needs (M1 is generally faster for Flutter)
-    instance_type: mac_mini_m1
-    max_build_duration: 60 # minutes
+  android-lamafia-release:
+    name: LAMAFIA Android Release Build
+    max_build_duration: 60 # Tempo máximo em minutos
+    instance_type: mac_mini_m1 # Ou outro tipo de instância disponível
     environment:
-      flutter: stable # Or specify your project's Flutter version, e.g., 3.19.6
-      # Ensure Java version is compatible if needed, e.g., java: 11
+      flutter: stable # Ou a versão específica do Flutter usada no projeto
+      xcode: latest # Necessário para ambiente macOS
+      cocoapods: default
+      # Variáveis de ambiente - Preencher no CodeMagic UI
       groups:
-        - keystore_credentials # For signing the APK/AAB
+        - google_credentials # Grupo para credenciais Google (ex: google-services.json)
+        - keystore_credentials # Grupo para credenciais de assinatura
       vars:
-        # !!! IMPORTANT: Confirm this is the correct Google Drive File ID for your source code ZIP !!!
-        # From your link: https://drive.google.com/file/d/1xPO6s-IJ3RxLlaA1m1TjlRj9QQndt9kw/view?usp=drivesdk
-        GOOGLE_DRIVE_FILE_ID: " 1xPO6s-IJ3RxLlaA1m1TjlRj9QQndt9kw"
-        # Note: Based on the 'OriginalLamafia.zip' structure, the project files (pubspec.yaml, etc.)
-        # are expected to be at the root level after unzipping. If your ZIP has the project
-        # inside a subfolder, you'll need to adjust the 'cd' command in the scripts below.
+        # --- Valores a serem definidos na UI do CodeMagic --- #
+        # PACKAGE_NAME: "com.lamafia.cla" # Definido aqui para referência, mas pode ser setado na UI
+        # APP_NAME: "lamafia"           # Definido aqui para referência
+        # CM_KEYSTORE_PATH: "/tmp/idcloned.keystore" # Caminho temporário onde o keystore será decodificado
+        # CM_KEYSTORE: Encrypted(...) # Conteúdo do keystore (idcloned.keystore) encriptado pelo CodeMagic
+        # CM_KEYSTORE_PASSWORD: Encrypted(lidcloned) # Senha do Keystore encriptada
+        # CM_KEY_ALIAS: Encrypted(minhachaveapp) # Alias da chave encriptado
+        # CM_KEY_ALIAS_PASSWORD: Encrypted(lidcloned) # Senha do Alias encriptada
+        # GOOGLE_SERVICES_JSON: Encrypted(...) # Conteúdo do google-services.json encriptado
+        # --- Fim das variáveis a serem definidas na UI --- #
 
-        # !!! IMPORTANT: Replace with your actual package name from pubspec.yaml or build.gradle !!!
-        PACKAGE_NAME: "com.soloplayer.lamafia" # Example, adjust as needed (Check your pubspec.yaml)
-        APP_NAME: "LaMafia" # Example App Name
+        # Valores fixos (podem ser sobrescritos na UI se necessário)
+        PACKAGE_NAME: "com.lamafia.cla"
+        APP_NAME: "lamafia"
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main # Ou a branch de release
+          include: true
+          source: true
+      tag_patterns:
+        - pattern: v*.*.* # Exemplo: v1.0.0
+          include: true
+
     scripts:
-      - name: Install gdown
+      - name: Set up local properties
         script: |
-          set -e # Exit immediately if a command exits with a non-zero status.
-          pip3 install gdown
-      - name: Download source code from Google Drive
+          echo "flutter.sdk=$FLUTTER_SDK" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Decode Keystore
         script: |
-          set -e
-          echo "Downloading project ZIP from Google Drive..."
-          # Using gdown to download the file using its ID
-          gdown --id $GOOGLE_DRIVE_FILE_ID -O project_source.zip
-      - name: Unzip source code
+          echo $CM_KEYSTORE | base64 --decode > /tmp/idcloned.keystore
+          echo "Keystore decodificado em /tmp/idcloned.keystore"
+      - name: Decode google-services.json
         script: |
-          set -e
-          echo "Unzipping project source..."
-          # Create a directory to extract into
-          mkdir extracted_project
-          unzip project_source.zip -d extracted_project
-          echo "Contents of extracted_project:"
-          ls -l extracted_project
-          # Navigate into the extracted project directory
-          # IMPORTANT: If your project files are inside a subfolder in the ZIP,
-          # you MUST add that subfolder name here, e.g., cd extracted_project/MyProjectFolder
-          cd extracted_project
-          echo "Current directory: $(pwd)"
-          # Verify pubspec.yaml exists in the current directory
-          if [ ! -f "pubspec.yaml" ]; then
-            echo "Error: pubspec.yaml not found in the root of the extracted ZIP (or the specified subfolder)."
-            echo "Please ensure the ZIP file contains the Flutter project files directly, not nested too deep,"
-            echo "or adjust the 'cd' command in this script if they are in a subfolder."
-            exit 1
-          fi
-          ls -la # List files to verify structure
-      - name: Set up local.properties
-        script: |
-          set -e
-          # Navigate into the project directory first
-          cd extracted_project
-          # Required for Flutter build if SDK path isn't automatically found
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
-          echo "Created android/local.properties"
+          echo $GOOGLE_SERVICES_JSON | base64 --decode > $CM_BUILD_DIR/android/app/google-services.json
+          echo "google-services.json decodificado."
       - name: Get Flutter packages
         script: |
-          set -e
-          cd extracted_project
-          flutter packages get
-      - name: Build Flutter App (APK and AAB)
+          flutter pub get
+      - name: Generate App Icons (se necessário)
         script: |
-          set -e
-          cd extracted_project
-          # Clean previous build artifacts
+          # Descomente se você usa flutter_launcher_icons e quer gerar a cada build
+          # flutter pub run flutter_launcher_icons:main
+          echo "Pulando geração de ícones (assumindo que já estão no repo ou gerados manualmente)"
+      - name: Build Android App Bundle (AAB)
+        script: |
+          # Limpa builds anteriores (opcional, mas recomendado)
           flutter clean
-          # Build Release APK (signed via environment variables in 'keystore_credentials' group)
-          echo "Building Release APK..."
-          # BUILD_NUMBER is a built-in Codemagic variable, increments automatically
-          # Replace 1.0.0 with your actual version name if needed
-          flutter build apk --release --build-name=1.0.0 --build-number=$BUILD_NUMBER
-          # Build Release App Bundle (signed via environment variables in 'keystore_credentials' group)
-          echo "Building Release App Bundle..."
-          flutter build appbundle --release --build-name=1.0.0 --build-number=$BUILD_NUMBER
+          # Constrói o AAB de release
+          flutter build appbundle --release \
+            --build-name=$CM_BUILD_VERSION \
+            --build-number=$CM_BUILD_NUMBER
+        env:
+           # As variáveis de keystore são usadas automaticamente pelo Flutter build
+           # quando definidas no ambiente (CM_KEYSTORE_PATH, etc.)
+           # mas podemos passá-las explicitamente se necessário.
+           KEYSTORE_PATH: /tmp/idcloned.keystore
+           KEYSTORE_PASSWORD: $CM_KEYSTORE_PASSWORD
+           KEY_ALIAS: $CM_KEY_ALIAS
+           KEY_ALIAS_PASSWORD: $CM_KEY_ALIAS_PASSWORD
+
     artifacts:
-      # Define paths relative to the root of the build directory ($CM_BUILD_DIR)
-      # These paths assume the build output is in the standard Flutter location
-      # relative to the extracted project root.
-      - extracted_project/build/app/outputs/flutter-apk/app-release.apk
-      - extracted_project/build/app/outputs/bundle/release/app-release.aab
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk # APKs gerados se usar `flutter build apk`
+      - flutter_drive.log
+
+    publishing:
+      # --- Exemplo: Upload para Google Drive --- #
+      # NOTA: Requer configuração de integração com Google Drive no CodeMagic
+      # e um script para fazer o upload.
+      # Exemplo usando gcloud (requer setup): 
+      # script: |
+      #   set -e
+      #   # Autenticar gcloud (usando service account key do CodeMagic)
+      #   gcloud auth activate-service-account --key-file=$GCLOUD_SERVICE_ACCOUNT_KEY
+      #   # Encontrar o AAB gerado
+      #   AAB_PATH=$(find $CM_BUILD_DIR/build/app/outputs/bundle/release -name '*.aab' | head -n 1)
+      #   # Fazer upload para um bucket GCS ou pasta Drive (ajustar comando)
+      #   gsutil cp $AAB_PATH gs://seu-bucket-ou-pasta-drive/lamafia-$CM_BUILD_VERSION.aab
+      #   echo "AAB enviado para Google Drive/GCS"
+
+      # --- Exemplo: Email (Notificação) --- #
+      email:
+        recipients:
+          - seu_email@exemplo.com # Adicionar seu email
+        notify:
+          success: true
+          failure: true
+
+      # --- Exemplo: Google Play Store --- #
+      # google_play:
+      #   credentials: $GOOGLE_PLAY_API_CREDENTIALS # Variável segura com JSON da API
+      #   track: internal # Ou alpha, beta, production
+      #   submit_as_draft: true
 
